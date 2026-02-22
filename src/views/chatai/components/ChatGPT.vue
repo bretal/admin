@@ -1,18 +1,44 @@
 <script setup lang="ts">
 import "deep-chat";
-import { ref, onMounted } from "vue";
+import { ref, onMounted, computed } from "vue";
 
 const chatRef = ref();
 
-onMounted(() => {
-  chatRef.value.demo = {
-    response: message => {
-      console.log(message);
-      return {
-        text: "仅演示，如需AI服务，请参考 https://deepchat.dev/docs/connect"
-      };
+// 从环境变量读取 DeepSeek API Key（仅开发/演示用，生产环境建议用后端代理）
+const deepSeekKey = import.meta.env.VITE_DEEPSEEK_API_KEY as string | undefined;
+console.log(deepSeekKey, "1111");
+
+// 当配置了 API Key 时使用 DeepSeek 直连，否则使用演示模式
+// 注意：system_message 必须为纯英文/ASCII，否则会触发 fetch headers 的 ISO-8859-1 报错
+const directConnectionConfig = computed(() => {
+  if (!deepSeekKey?.trim()) return undefined;
+  return {
+    deepSeek: {
+      key: deepSeekKey.trim(),
+      chat: {
+        model: "deepseek-chat",
+        system_message:
+          "You are a helpful AI assistant. Reply in the same language as the user.",
+        max_tokens: 2000,
+        temperature: 0.7
+      }
     }
   };
+});
+
+const isDemoMode = computed(() => !deepSeekKey?.trim());
+
+onMounted(() => {
+  if (isDemoMode.value && chatRef.value) {
+    chatRef.value.demo = {
+      response: () => ({
+        text: "仅演示，如需真实 AI 对话，请在 .env.development 中配置 VITE_DEEPSEEK_API_KEY（你的 DeepSeek API Key）。生产环境建议使用后端代理：https://deepchat.dev/docs/connect"
+      })
+    };
+  }
+  if (directConnectionConfig.value && chatRef.value) {
+    chatRef.value.directConnection = directConnectionConfig.value;
+  }
 });
 </script>
 
@@ -108,7 +134,8 @@ onMounted(() => {
         role: 'ai'
       }
     ]"
-    :demo="true"
+    :demo="isDemoMode"
+    :directConnection="directConnectionConfig"
     :connect="{ stream: true }"
   />
 </template>
